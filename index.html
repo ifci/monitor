@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+<head>
+	<meta charset="UTF-8">
+	<meta name="renderer" content="webkit" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge|chrome=1" />
+    <meta name="author" content="fcdcyy@sina.cn">
+    <meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no">
+    <meta name="format-detection" content="email=no">
+    <meta name="format-detection" content="telephone=no">
+	<title>轮播监控</title>
+	<link rel="stylesheet" href="css/base.css">
+	<link rel="stylesheet" href="css/monitor.css">
+</head>
+<body id="app" v-cloak>
+	<header class="clearfix">
+		<div>网警监控系统</div>
+		<div v-if="!userName">用户名 <input type="text" v-model="entryUserName" @keyup="enter($event, 'login')"> 密码 <input type="password" @keyup="enter($event, 'login')" v-model="passWord"><button class="login" :class="{'disabled': logDisabled}" @click="login">登录</button></div>
+		<div v-else><em>{{ userName }}</em> <a class="logout" @click="logout">退出</a></div>
+		<div v-if="innerPolice === '0'"><button class="btn outside" :class="{'play': playPause, 'suspend': !playPause}" @click="pause(playPause ? 'play' : 'suspend')">剩余({{ remaining < 10 ? '0' : '' }}{{ remaining }})秒刷新 </button></div>
+		<template v-if="innerPolice === '1'">
+			<div><input width="30" type="number" v-model="entrySeconds"><button @click="reSeconds">刷新秒数({{ remaining < 10 ? '0' : '' }}{{ remaining }})</button><button class="btn" :class="{'play': playPause, 'suspend': !playPause}" @click="pause(playPause ? 'play' : 'suspend')"></button></div>
+			<div><input type="number" v-model="entryCount"><button @click="reCount">展示人数</button></div>
+			<div><input v-model="entryAccount" type="text" placeholder="大智慧号/视吧号" @keyup="enter($event, 'search')"><button @click="search">搜主播</button></div>
+			<div><a target="_blank" href="index.html">轮播监控</a></div>
+			<div><a target="_blank" href="newcomers.html">新人监控</a></div>
+			<div><a target="_blank" href="yellowMonitor.html">鉴黄监控</a></div>
+			<div><a target="_blank" href="information.html">消息监控</a></div>
+			<div><a target="_blank" href="closed.html">卡机监控</a></div>
+			<div><a target="_blank" href="monitorList.html">自由浏览</a></div>
+		</template>
+		<button v-if="userName" @click="reload" style="border-left: 1px solid #ccc;margin-left: 10px;">下一屏(F5)</button>
+	</header>
+	<div class="content">
+		<div v-if="!userName" style="text-align: center;padding-top: 100px;">尚未登录！</div>
+		<ul class="list clearfix">
+			<li v-for="item in list"><div class="top" :title="item.OwnerName + ' ' + item.Account + ' ' + item.RoomID + ' ' + item.RoomTopic + ' ' + item.WatcherNum + '人在看'"><div class="avatar"><img :src="item.RoomImg + '@50w'"></div><span class="fb">{{ item.OwnerName }}</span><span>{{ item.Account }}</span><span>{{ item.RoomID }}</span><span>{{ item.RoomTopic }}</span><span>{{ item.WatcherNum }}人在看</span></div><div class="box"><em v-if="item.Snapshots.length === 0"><img src="images/empty.png"></em><template v-else><i><img :src="item.Snapshots[0]"></i><i><img :src="item.Snapshots[1]"></i></template><a @click="pause('suspend')" href="anchorMonitor.html?account={{ item.Account }}" target="_blank" class="bg">查看该主播更多截图</a><a @click="showPunish(item.Account, item.OwnerName, item.Snapshots[0])" class="report">处罚</a></div></li>
+		</ul>
+		<div class="nextPage" @click="reload" v-if="userName && !loading">下一屏(F5)</div>
+		<!-- <input style="margin: 100px 0 0 200px" type="text" v-model="test"><button @click="showPunish(test, '测试账号', '测试数据')">处罚</button> -->
+	</div>
+
+	<div class="tips" :class="{'success': tipsMsg === 'success', 'error': tipsMsg !== 'success', 'show': tipsShow}">{{ tipsMsg === 'success' ? '提交成功' : '操作失败，错误代码：' + tipsMsg }}</div>
+
+	<div class="loading" v-if="loading"></div>
+
+	<div class="layer-bg" v-if="punishData" @click="closePunish"></div>
+	<div class="layer" v-if="punishData">
+		<div class="layer-head">
+			处罚
+			<i class="close" @click="closePunish">X</i>
+		</div>
+		<div class="layer-con">
+			<div class="clearfix">
+				<div style="width: 50%;float: left">主播姓名: {{ punishData.ownerName }}</div>
+				<div style="width: 50%;float: left">主播账号: {{ punishData.account }}</div>
+			</div>
+			<div>
+				是否申请永久下架: <input type="radio" value="1" name="isStop" v-model="isStop"> 是 <input checked="" type="radio" value="0" name="isStop" v-model="isStop"> 否
+			</div>
+			<div>
+				处罚原因:
+				<label v-for="value in punishReason" @click="checkedReason(value.id)" :class="{'active': value.id == checkedId}"><input type="radio" v-model="activeReason" :value="value.id" :checked="value.id == valueId" name="punishReason"> {{ value.description }}({{ value.score }})</label>
+				<!-- <select name="" id="" v-model="activeReason">
+					<option :checked="value.id === 12 ? 'checked' : false" :value="value.id" v-for="value in punishReason">{{ value.description }}({{ value.score }})</option>
+				</select> -->
+			</div>
+			<button class="submit" :class="{'v-loading': disabled}" @click="punishment">{{disabled ? '' : '提交' }}</button>
+		</div>
+	</div>
+
+	<script src="js/vue.min.js"></script>
+	<script src="js/common.js"></script>
+	<script src="js/base64.js"></script>
+	<script src="js/monitor.js"></script>
+</body>
+</html>
